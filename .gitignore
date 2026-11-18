@@ -1,0 +1,9 @@
+# 原始成绩表不要上传
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.pdf
+*.doc
+*.docx
+.DS_Store
