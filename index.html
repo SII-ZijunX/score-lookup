@@ -43,6 +43,14 @@
   .cell .v { font-size: 18px; font-weight: 600; }
   .cell .v small { font-size: 12px; color: var(--muted); font-weight: 400; }
   .cell.lost .v { color: var(--err); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; line-height: 1; padding: 3px 6px; border-radius: 6px;
+    background: var(--accent-soft); color: var(--accent); vertical-align: 3px; }
+  .x { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; }
+  .tab { width: auto; flex: none; background: var(--bg); color: var(--muted); border: 1px solid var(--line);
+    font-weight: 500; font-size: 14px; padding: 7px 12px; border-radius: 999px; }
+  .tab.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tname { font-size: 14px; color: var(--muted); margin: -6px 0 12px; }
   .group { display: flex; justify-content: space-between; align-items: baseline; margin: 18px 0 8px;
     padding-bottom: 6px; border-bottom: 1px solid var(--line); font-weight: 600; }
   .group b { font-size: 17px; }
@@ -93,31 +101,43 @@
   }
 
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const isTotal = (k) => /总分|合计|总计|总成绩/.test(k);
+  // 大字显示的总分：优先「总分/五总/六总…」这类最大的总分
+  const isTotal = (k) => /总分|合计|总计|总成绩|^[五六七九]总$|全科/.test(k);
 
-  function render(r) {
-    const full = r.full || {};
+  function tableHtml(t) {
     let totalHtml = '', cells = '';
-    r.cols.forEach((k, i) => {
-      const v = r.vals[i];
-      const f = full[k];
+    t.items.forEach((it) => {
+      const { k, v, full: f, tag, extra } = it;
+      const tagHtml = tag ? ` <span class="tag">${esc(tag)}</span>` : '';
+      const extraHtml = extra ? `<div class="x">${extra.map(esc).join('<br>')}</div>` : '';
       if (isTotal(k) && !totalHtml) {
-        totalHtml = `<div class="total"><div class="k">${esc(k)}</div><div class="v">${esc(v)}${f ? ` <small>/ ${esc(f)}</small>` : ''}</div></div>`;
+        totalHtml = `<div class="total"><div class="k">${esc(k)}</div><div class="v">${esc(v)}${f ? ` <small>/ ${esc(f)}</small>` : ''}${tagHtml}</div>${extraHtml}</div>`;
         return;
       }
-      const lost = f !== undefined && f !== '' && v !== '' && !isNaN(v) && Number(v) < Number(f);
+      const lost = f && v !== '' && !isNaN(v) && Number(v) < Number(f);
       const score = `${esc(v === '' ? '—' : v)}${f ? ` <small>/${esc(f)}</small>` : ''}`;
-      if (/大题/.test(k)) { // 大题作为分组标题，下面跟它的小题
+      if (it.group) { // 大题作为分组标题，下面跟它的小题
         cells += `${cells ? '</div>' : ''}<div class="group${lost ? ' lost' : ''}"><span>${esc(k)}</span><b>${score}</b></div><div class="grid">`;
         return;
       }
       if (!cells) cells = '<div class="grid">';
-      cells += `<div class="cell${lost ? ' lost' : ''}"><div class="k">${esc(k)}</div><div class="v">${score}</div></div>`;
+      cells += `<div class="cell${lost ? ' lost' : ''}"><div class="k">${esc(k)}</div><div class="v">${score}${tagHtml}</div>${extraHtml}</div>`;
     });
     if (cells) cells += '</div>';
+    return totalHtml + cells;
+  }
+
+  function render(r) {
+    const tabs = r.tables.length > 1
+      ? `<div class="tabs">${r.tables.map((t, i) => `<button type="button" class="tab${i ? '' : ' on'}" data-i="${i}">${esc(t.title)}</button>`).join('')}</div>`
+      : `<div class="tname">${esc(r.tables[0].title || '')}</div>`;
     $('#result').innerHTML = `<div class="card">
       <div class="head"><span class="who">${esc(r.name)}</span><button class="link" id="again" type="button">换个人查</button></div>
-      ${totalHtml}${cells}</div>`;
+      ${tabs}<div id="tbody">${tableHtml(r.tables[0])}</div></div>`;
+    document.querySelectorAll('.tab').forEach((b) => (b.onclick = () => {
+      document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === b));
+      $('#tbody').innerHTML = tableHtml(r.tables[Number(b.dataset.i)]);
+    }));
     $('#result').hidden = false;
     $('#form').hidden = true;
     $('#again').onclick = () => {
